@@ -1,0 +1,7 @@
+name: analytics
+
+profile: databricks
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
