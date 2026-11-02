@@ -1,0 +1,9 @@
+sources:
+  - name: jobs
+    database: raw
+    schema: jobs
+    tables:
+      - name: raw_job_postings
+        description: "One raw per posting per scrape event."
+      - name: raw_job_skills
+        description: "One raw per (job,skill) pair extracted from each posting."
