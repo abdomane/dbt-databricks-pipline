@@ -1,14 +1,14 @@
 [project]
 name = "dbt-databricks-pipline"
 version = "0.1.0"
-description = "Add your description here"
+description = "dbt (v2) analytics pipeline on Databricks: job postings staging, intermediate and star-schema marts."
 readme = "README.md"
 authors = [
     { name = "Abderrhman LAKEHAL", email = "ID+username@users.noreply.github.com" }
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "dbt>=2.0.9",
+    "dbt>=2.0.11,<3",
 ]
 
 [project.scripts]

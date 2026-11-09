@@ -1,0 +1,38 @@
+{{
+    config(
+        materialized='incremental',
+        incremental_strategy='merge',
+        unique_key='job_id'
+    )
+}}
+
+WITH job_postings AS (
+    SELECT * FROM {{ ref('stg_job_postings') }}
+    {% if is_incremental() %}
+    -- high-water mark: only re-read scrape days at or after the latest one already loaded
+    WHERE search_date >= (SELECT MAX(search_date) FROM {{ this }})
+    {% endif %}
+)
+
+SELECT
+    job_id,
+    job_title,
+    search_term,
+    company_name,
+    job_location,
+    source_platform,
+    job_schedule_type,
+    job_work_from_home,
+    search_date,
+    salary_min,
+    salary_max,
+    salary_avg,
+    salary_period,
+    salary_currency,
+    has_health_insurance,
+    has_dental_insurance,
+    has_paid_time_off,
+    has_no_degree_mentioned
+FROM job_postings
+-- one row per job: latest scrape wins
+QUALIFY ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY searched_at DESC) = 1

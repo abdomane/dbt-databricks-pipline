@@ -30,15 +30,35 @@ models:
         description: Raw relative posted time ('10 hours ago'), kept unparsed - search_date carries the time axis; parsing it is a supporter exercise.
       - name: job_salary
         description: Raw salary text, unparsed for now.
+      - name: salary_min
+        description: >
+          Lower bound parsed from the salary text (K/M suffixes expanded); a single
+          figure is its own range, so min = max. Null when absent or unparseable.
+      - name: salary_max
+        description: >
+          Upper bound parsed from the salary text (K/M suffixes expanded); a single
+          figure is its own range, so min = max. Null when absent or unparseable.
+      - name: salary_avg
+        description: >
+          THE standard salary measure: midpoint of the parsed range (a single figure
+          is its own range). Deliberately unit-agnostic - always pair it with
+          salary_period and salary_currency filters; averaging across periods or
+          currencies is meaningless.
+      - name: salary_period
+        description: "Pay period parsed from the salary text: year, month, week, day, hour."
+      - name: salary_currency
+        description: >
+          Currency of the salary columns. Leading marker when present; a salaried row
+          with no marker is stamped 'USD' (documented assumption). Null only when the
+          row has no salary at all.
       - name: has_health_insurance
-        description: Posting lists Health insurance among its extensions
+        description: Posting lists Health insurance among its extensions.
       - name: has_dental_insurance
-        description: Posting lists Dental insurance among its extensions
+        description: Posting lists Dental insurance among its extensions.
       - name: has_paid_time_off
         description: Posting lists Paid time off among its extensions.
       - name: has_no_degree_mentioned 
         description: Posting lists No degree mentioned among its extensions.
-
   - name: stg_job_skills
     description: >
       One row per (job_id, skill_keyword), straight off the raw table.

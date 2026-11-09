@@ -2,6 +2,8 @@ name: analytics
 
 profile: databricks
 
+require-dbt-version: [">=2.0.0", "<3.0.0"]
+
 clean-targets:
   - "target"
   - "dbt_packages"
@@ -20,3 +22,10 @@ models:
     marts:
       +materialized: table
       +schema: marts
+
+seeds:
+  analytics:
+    +schema: seeds
+    
+flags:
+  require_generic_test_arguments_property: true
