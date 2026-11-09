@@ -10,6 +10,9 @@ models:
     columns:
       - name: job_id
         description: Posting id from the scraper; the grain and the merge key.
+        data_tests:
+          - not_null
+          - unique
       - name: job_title
         description: Title as posted.
       - name: search_term
@@ -18,6 +21,12 @@ models:
           under a different search carries its most recent term.
       - name: company_name
         description: Employer, trimmed upstream; natural key into dim_company.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_company')
+                field: company_name
       - name: job_location
         description: Location text as posted.
       - name: source_platform
@@ -69,11 +78,14 @@ models:
           aggregation — the filter lives in the AVG, so total_job_postings still
           counts every job); null when none qualify.
 
-  - name: dim_skill
+  - name: dim_skills
     description: One row per skill; the seed provides the taxonomy, the data provides the counts.
     columns:
       - name: skill_id
         description: Skill key from the seed.
+        data_tests:
+          - not_null
+          - unique
       - name: display_name
         description: Human-readable skill name.
       - name: category
@@ -93,7 +105,19 @@ models:
     columns:
       - name: job_id
         description: Job carrying the skill; every value exists in fct_job_postings.
+        data_tests:        
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_job_postings')
+                field: job_id
       - name: skill_id
         description: Skill observed on the job; every value exists in dim_skill.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_skills')
+                field: skill_id
       - name: skill_keyword
         description: Raw skill keyword, trimmed upstream.

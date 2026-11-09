@@ -1,17 +1,6 @@
-{{
-    config(
-        materialized='incremental',
-        incremental_strategy='merge',
-        unique_key='job_id'
-    )
-}}
 
 WITH job_postings AS (
     SELECT * FROM {{ ref('stg_job_postings') }}
-    {% if is_incremental() %}
-    -- high-water mark: only re-read scrape days at or after the latest one already loaded
-    WHERE search_date >= (SELECT MAX(search_date) FROM {{ this }})
-    {% endif %}
 )
 
 SELECT
