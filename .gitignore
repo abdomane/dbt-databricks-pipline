@@ -9,4 +9,14 @@ wheels/
 # Virtual environments
 .venv/
 .vscode/
+.agents/
 logs/
+
+# graphify: keep graph.json + GRAPH_REPORT.md + graph.html, ignore cache/local state
+graphify-out/
+# graphify-out/cache/
+# graphify-out/.graphify_*
+# graphify-out/manifest.json
+# graphify-out/cost.json
+# graphify-out/20*/
+

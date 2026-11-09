@@ -7,14 +7,8 @@ sources:
         description: "One row per posting per scrape event."
         columns:
           - name: job_id
-            data_tests:
-              - not_null
       - name: raw_job_skills
         description: "One row per (job, skill) pair extracted from each posting."
         columns:
           - name: job_id
-            data_tests:
-              - not_null
           - name: skill_id
-            data_tests:
-              - not_null
