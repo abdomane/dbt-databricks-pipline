@@ -87,3 +87,24 @@ models:
         description: Skill key; the human-readable text rides in skill_keyword.
       - name: skill_keyword
         description: Skill text as extracted, trimmed.
+
+unit_tests:
+  - name: test_parse_salary_shape
+    description: >
+      The salary parsing UDF is a bit of a black box; this test checks that it
+      returns the expected shape (min, max, avg, period, currency) for a few
+      representative inputs.
+    model: stg_job_postings
+    given:
+      - input: source('jobs', 'raw_job_postings')
+        rows:
+          - {job_id: 1, job_salary: "$100K–$120K"}
+          - {job_id: 2, job_salary: "32.5 a hour"}
+          - {job_id: 3, job_salary: null}
+          - {job_id: 4, job_salary: "$50/hour"}
+    expect:
+      rows:
+        - {job_id: 1, salary_min: 100000, salary_max: 120000, salary_avg: 110000, salary_period: null, salary_currency: "$"}
+        - {job_id: 2, salary_min: 32.5, salary_max: 32.5, salary_avg: 32.5, salary_period: "hour", salary_currency: "USD"}
+        - {job_id: 3, salary_min: null, salary_max: null, salary_avg: null, salary_period: null, salary_currency: null}
+        - {job_id: 4, salary_min: 50, salary_max: 50, salary_avg: 50, salary_period: null, salary_currency: "$"}
