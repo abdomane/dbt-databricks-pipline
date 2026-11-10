@@ -1,0 +1,4 @@
+# Ignore generated static dbt documentation bundles (minified JS/CSS/parquet)
+docs/
+# Ignore image assets
+img/
