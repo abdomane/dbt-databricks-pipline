@@ -1,3 +1,8 @@
+{{ config(
+    materialized='incremental',
+    incremental_strategy='merge',
+    unique_key='job_id'
+) }}
 
 WITH job_postings AS (
     SELECT * FROM {{ ref('stg_job_postings') }}
@@ -23,5 +28,8 @@ SELECT
     has_paid_time_off,
     has_no_degree_mentioned
 FROM job_postings
+{% if is_incremental() %}
+    WHERE search_date > (SELECT MAX(search_date) FROM {{ this }})
+{% endif %}
 -- one row per job: latest scrape wins
 QUALIFY ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY searched_at DESC) = 1
