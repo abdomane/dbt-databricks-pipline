@@ -11,6 +11,9 @@ wheels/
 .vscode/
 .agents/
 logs/
+airflow/.env
+airflow/logs/
+
 
 # graphify: keep graph.json + GRAPH_REPORT.md + graph.html, ignore cache/local state
 graphify-out/

@@ -21,7 +21,7 @@ A production dbt pipeline on **Databricks** over 843,097 raw job-posting scrapes
 | **Macros** | custom salary parser, column-name slugifier, and an overridden built-in | [`analytics/macros/`](analytics/macros/) |
 | **Tests** | generic, singular, custom generic (`non_negative`), and unit tests | [`analytics/tests/`](analytics/tests/) + the properties YAMLs |
 | **Environments** | dev/prod as catalogs: dev from the laptop, prod only from the job | Unity Catalog: `dev` + `prod` |
-| **Orchestration** | scheduled Databricks Job, zero secrets | Databricks → Jobs & Pipelines |
+| **Orchestration** | scheduled Databricks Job OR granular **Apache Airflow + Cosmos** DAG | [`airflow/dags/job_postings_dag.py`](airflow/dags/job_postings_dag.py) + Databricks Workflows |
 | **Analyses** | ad-hoc skill demand, Jinja loops, and snapshot history queries | [`analytics/analyses/`](analytics/analyses/) |
 | **Knowledge Graph** | AST + semantic graph of the codebase & dbt lineage via Graphify | [`graphify-out/GRAPH_REPORT.md`](graphify-out/GRAPH_REPORT.md) + [`.agents/`](.agents/) |
 
@@ -62,6 +62,22 @@ And the dbt features doing the work:
 - **Zero secrets**: the job generates a temporary-credentials profile against the attached warehouse and revokes it after the run — no tokens in the repo, no CI secrets
 
 Any BI tool connects straight to the warehouse — SQL editor, Excel, Power BI, and Tableau all query the `prod` catalog directly.
+
+### 🌬️ Airflow + Astronomer Cosmos Orchestration (`airflow/`)
+
+In addition to native Databricks Workflows, this repository includes a containerized **Apache Airflow + Astronomer Cosmos (`astronomer-cosmos`)** setup in [`airflow/`](airflow/):
+
+![Airflow + Astronomer Cosmos DAG](img/DAG.png)
+
+- **Task-Level dbt Lineage (`DbtTaskGroup`)**: Instead of running `dbt build` as a single black-box step, Cosmos parses [`analytics/`](analytics/) and renders every seed, staging view, SCD2 snapshot, intermediate view, and mart table into individual Airflow tasks with `TestBehavior.AFTER_EACH` circuit-breaking.
+- **Zero-Secret Profile Mapping (`DatabricksTokenProfileMapping`)**: Dynamically generates a temporary `profiles.yml` at runtime from Airflow's `databricks_default` connection (`AIRFLOW_CONN_DATABRICKS_DEFAULT`).
+- **Isolated dbt Virtualenv**: [`airflow/Dockerfile`](airflow/Dockerfile) installs `dbt-databricks` into `/opt/airflow/dbt_venv` to prevent dependency conflicts between Airflow and dbt.
+
+```bash
+cd airflow
+cp .env.example .env                     # fill in your Databricks Host, HTTP Path & Token
+docker compose up -d --build             # starts Postgres, Airflow Webserver (:8080) & Scheduler
+```
 
 ---
 
@@ -122,6 +138,10 @@ Backfill a year of snapshot history in one query: paste [`scripts/backfill_job_p
 │   ├── tests/                        # assert_salaries_sane.sql + generic/non_negative.sql
 │   └── analyses/                     # in_demand_skills, jinja_example, top_posting_editors, salary_swings
 ├── scripts/                          # load_raw.py (the job's ingest task) + snapshot backfill
+├── airflow/                          # Apache Airflow + Astronomer Cosmos Docker setup & DAG
+│   ├── dags/job_postings_dag.py      # Databricks ingestion + DbtTaskGroup DAG
+│   ├── Dockerfile                    # Airflow 2.10 + isolated /opt/airflow/dbt_venv
+│   └── docker-compose.yml            # LocalExecutor stack (Postgres, Webserver, Scheduler)
 ├── docs/                             # generated static dbt documentation site (GitHub Pages)
 ├── graphify-out/                     # codebase & dbt lineage knowledge graph (graph.json, GRAPH_REPORT.md, graph.html)
 ├── .agents/                          # AI assistant rules, workflows & graphify skill
