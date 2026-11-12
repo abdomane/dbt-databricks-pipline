@@ -23,7 +23,6 @@ from airflow.decorators import dag, task
 from airflow.operators.empty import EmptyOperator
 from airflow.providers.databricks.operators.databricks import DatabricksRunNowOperator
 from airflow.models import Variable  # UI‑editable variable for dev/prod selection
-import cosmos  # needed for configuring dbt_docs_projects
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.operators.python import PythonOperator  # for auto‑create variable
 from cosmos import (
@@ -34,7 +33,6 @@ from cosmos import (
     ProjectConfig,
     RenderConfig,
     TestBehavior,
-    DbtDocsConfig,
 )
 from cosmos.profiles import DatabricksTokenProfileMapping
 
@@ -49,7 +47,7 @@ DBT_PROJECT_PATH = Path(
 DBT_EXECUTABLE_PATH = os.getenv(
     "DBT_EXECUTABLE_PATH", "/opt/airflow/dbt_venv/bin/dbt"
 )
-DBT_TARGET_CATALOG = Variable.get("DBT_TARGET_CATALOG", default_var=os.getenv("DBT_TARGET_CATALOG", "dev"))
+DBT_TARGET_CATALOG = os.getenv("DBT_TARGET_CATALOG", "dev")
 DATABRICKS_CONN_ID = "databricks_default"
 
 # ---------------------------------------------------------------------------
@@ -57,18 +55,9 @@ DATABRICKS_CONN_ID = "databricks_default"
 # ---------------------------------------------------------------------------
 # Reads Host, Token, and SQL Warehouse HTTP Path from Airflow's `databricks_default`
 # connection and dynamically builds a temporary profiles.yml for each task.
-profile_config = ProfileConfig(
-    profile_name="databricks",  # Must match `profile: databricks` in analytics/dbt_project.yml
-    target_name=DBT_TARGET_CATALOG,
-    profile_mapping=DatabricksTokenProfileMapping(
-        conn_id=DATABRICKS_CONN_ID,
-        profile_args={
-            "catalog": DBT_TARGET_CATALOG,
-            "schema": "default",
-            "threads": 4,
-        },
-    ),
-)
+# NOTE: profile_config is built inside the DAG function so Variable.get() runs
+# at execution time (not at module import time, which would break the DagBag).
+
 
 # ---------------------------------------------------------------------------
 # 3. DAG Definition
@@ -93,19 +82,32 @@ default_args = {
 )
 def job_postings_databricks_pipeline():
 
-    # Auto‑create Airflow Variable for catalog selection if it does not exist
+    # ------------------------------------------------------------------
+    # Resolve target catalog from Airflow Variable (editable via UI)
+    # Falls back to env var → "dev" when the Variable does not exist yet.
+    # ------------------------------------------------------------------
+    target_catalog = Variable.get(
+        "DBT_TARGET_CATALOG",
+        default_var=os.getenv("DBT_TARGET_CATALOG", "dev"),
+    )
+
+    profile_config = ProfileConfig(
+        profile_name="databricks",
+        target_name=target_catalog,
+        profile_mapping=DatabricksTokenProfileMapping(
+            conn_id=DATABRICKS_CONN_ID,
+            profile_args={
+                "catalog": target_catalog,
+                "schema": "default",
+                "threads": 4,
+            },
+        ),
+    )
+
+    # Auto‑create / refresh the Airflow Variable so it's visible in UI
     ensure_target_catalog = PythonOperator(
         task_id="ensure_target_catalog",
-        python_callable=lambda **_: (
-            Variable.set(
-                "DBT_TARGET_CATALOG",
-                Variable.get(
-                    "DBT_TARGET_CATALOG",
-                    default_var=os.getenv("DBT_TARGET_CATALOG", "dev"),
-                ),
-            )
-        ),
-        provide_context=True,
+        python_callable=lambda **_: Variable.set("DBT_TARGET_CATALOG", target_catalog),
     )
 
     @task.branch(task_id="check_raw_ingestion_job")
@@ -156,7 +158,7 @@ def job_postings_databricks_pipeline():
     # 4. Task Dependencies (Orchestration Flow)
     # -----------------------------------------------------------------------
     branch = check_raw_ingestion_job()
-    branch >> [load_raw, skip_raw] >> ready_for_dbt >> dbt_analytics >> pipeline_complete
+    ensure_target_catalog >> branch >> [load_raw, skip_raw] >> ready_for_dbt >> dbt_analytics >> pipeline_complete
 
 
 job_postings_databricks_pipeline()

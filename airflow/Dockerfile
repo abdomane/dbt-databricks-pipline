@@ -1,4 +1,4 @@
-FROM apache/airflow:2.10.2-python3.11
+FROM apache/airflow:3.1.1-python3.11
 
 USER root
 RUN apt-get update \
@@ -14,7 +14,6 @@ RUN python -m venv /opt/airflow/dbt_venv \
     && /opt/airflow/dbt_venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/airflow/dbt_venv/bin/pip install --no-cache-dir "dbt-databricks>=1.8.0,<2.0.0"
 
-# 2. Install Airflow providers & Astronomer Cosmos (pinned to current Airflow version)
+# 2. Install Airflow providers & Astronomer Cosmos
 COPY requirements.txt /opt/airflow/requirements.txt
-RUN pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" -r /opt/airflow/requirements.txt
-
+RUN pip install --no-cache-dir -r /opt/airflow/requirements.txt

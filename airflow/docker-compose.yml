@@ -14,6 +14,9 @@ x-airflow-common: &airflow-common
     # Enable Cosmos caching & increase import timeout for Windows Docker mounts
     AIRFLOW__COSMOS__ENABLE_CACHE: 'true'
     AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: '120'
+    # Cosmos dbt Docs — Browse → dbt Docs in the Airflow UI
+    AIRFLOW__COSMOS__DBT_DOCS_PROJECTS: '{"job_postings": {"docs_dir": "/opt/airflow/dbt/analytics/target"}}'
+    AIRFLOW__COSMOS__DBT_DOCS_CONN_ID: ''
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
