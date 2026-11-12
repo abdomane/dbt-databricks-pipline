@@ -22,7 +22,10 @@ from pathlib import Path
 from airflow.decorators import dag, task
 from airflow.operators.empty import EmptyOperator
 from airflow.providers.databricks.operators.databricks import DatabricksRunNowOperator
+from airflow.models import Variable  # UI‑editable variable for dev/prod selection
+import cosmos  # needed for configuring dbt_docs_projects
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.operators.python import PythonOperator  # for auto‑create variable
 from cosmos import (
     DbtTaskGroup,
     ExecutionConfig,
@@ -31,6 +34,7 @@ from cosmos import (
     ProjectConfig,
     RenderConfig,
     TestBehavior,
+    DbtDocsConfig,
 )
 from cosmos.profiles import DatabricksTokenProfileMapping
 
@@ -45,7 +49,7 @@ DBT_PROJECT_PATH = Path(
 DBT_EXECUTABLE_PATH = os.getenv(
     "DBT_EXECUTABLE_PATH", "/opt/airflow/dbt_venv/bin/dbt"
 )
-DBT_TARGET_CATALOG = os.getenv("DBT_TARGET_CATALOG", "dev")
+DBT_TARGET_CATALOG = Variable.get("DBT_TARGET_CATALOG", default_var=os.getenv("DBT_TARGET_CATALOG", "dev"))
 DATABRICKS_CONN_ID = "databricks_default"
 
 # ---------------------------------------------------------------------------
@@ -89,7 +93,21 @@ default_args = {
 )
 def job_postings_databricks_pipeline():
 
-    # Step 1A: Branching — decide whether to trigger the Databricks raw ingestion job
+    # Auto‑create Airflow Variable for catalog selection if it does not exist
+    ensure_target_catalog = PythonOperator(
+        task_id="ensure_target_catalog",
+        python_callable=lambda **_: (
+            Variable.set(
+                "DBT_TARGET_CATALOG",
+                Variable.get(
+                    "DBT_TARGET_CATALOG",
+                    default_var=os.getenv("DBT_TARGET_CATALOG", "dev"),
+                ),
+            )
+        ),
+        provide_context=True,
+    )
+
     @task.branch(task_id="check_raw_ingestion_job")
     def check_raw_ingestion_job() -> str:
         job_id = int(os.getenv("AIRFLOW_VAR_DATABRICKS_LOAD_RAW_JOB_ID", "0"))
