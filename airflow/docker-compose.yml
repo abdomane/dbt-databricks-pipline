@@ -10,7 +10,14 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution/'
+    AIRFLOW__TASK_SDK__BASE_URL: 'http://airflow-webserver:8080'
+    AIRFLOW__SDK__API_BASE_URL: 'http://airflow-webserver:8080'
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:?Set a shared random secret in airflow/.env}
+    AIRFLOW__API__EXPOSE_CONFIG: 'non-sensitive-only'
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "${_AIRFLOW_WWW_USER_USERNAME:-admin}:admin"
+    OPENLINEAGE_DISABLED: 'true'
     # Enable Cosmos caching & increase import timeout for Windows Docker mounts
     AIRFLOW__COSMOS__ENABLE_CACHE: 'true'
     AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: '120'
@@ -48,19 +55,14 @@ services:
     command:
       - -c
       - |
-        /opt/airflow/dbt_venv/bin/dbt deps --project-dir /opt/airflow/dbt/analytics &&
-        airflow db migrate &&
-        airflow users create \
-          --username "$${_AIRFLOW_WWW_USER_USERNAME:-admin}" \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@example.com \
-          --password "$${_AIRFLOW_WWW_USER_PASSWORD:-admin}" || true
+        set -e
+        /opt/airflow/dbt_venv/bin/dbt deps --project-dir /opt/airflow/dbt/analytics
+        airflow db migrate
+        if ! airflow variables get DBT_TARGET_CATALOG >/dev/null 2>&1; then
+          airflow variables set DBT_TARGET_CATALOG "${DBT_TARGET_CATALOG:-dev}"
+        fi
     environment:
       <<: *airflow-common-env
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
 
   airflow-webserver:
     <<: *airflow-common
@@ -68,12 +70,11 @@ services:
       - bash
       - -c
       - |
-        rm -f /opt/airflow/airflow-webserver.pid
-        exec airflow webserver
+        exec airflow api-server
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -86,14 +87,27 @@ services:
     <<: *airflow-common
     command: scheduler
     healthcheck:
-      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 30s
     restart: always
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+      airflow-webserver:
+        condition: service_healthy
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-webserver:
+        condition: service_healthy
 
 volumes:
   postgres-db-volume:

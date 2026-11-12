@@ -75,9 +75,20 @@ In addition to native Databricks Workflows, this repository includes a container
 
 ```bash
 cd airflow
-cp .env.example .env                     # fill in your Databricks Host, HTTP Path & Token
-docker compose up -d --build             # starts Postgres, Airflow Webserver (:8080) & Scheduler
+cp .env.example .env                     # fill in the shared JWT secret and Databricks values
+docker compose up -d --build             # starts Postgres, Airflow API server (:8080), Scheduler & DAG processor
 ```
+
+Generate a shared `AIRFLOW__API_AUTH__JWT_SECRET` with
+`python -c "import secrets; print(secrets.token_urlsafe(48))"` and put it in `.env`.
+All Airflow services must use the same value.
+
+Airflow 3 generates a SimpleAuthManager password on startup. Read it with
+`docker compose exec airflow-webserver cat /opt/airflow/simple_auth_manager_passwords.json.generated`.
+
+Choose the dbt catalog in the Airflow UI under **Admin → Variables** by setting
+`DBT_TARGET_CATALOG` to `dev` or `prod`. The first value is seeded from
+`DBT_TARGET_CATALOG` in `.env` (defaults to `dev`) and is preserved on restarts.
 
 ---
 
@@ -138,10 +149,10 @@ Backfill a year of snapshot history in one query: paste [`scripts/backfill_job_p
 │   ├── tests/                        # assert_salaries_sane.sql + generic/non_negative.sql
 │   └── analyses/                     # in_demand_skills, jinja_example, top_posting_editors, salary_swings
 ├── scripts/                          # load_raw.py (the job's ingest task) + snapshot backfill
-├── airflow/                          # Apache Airflow + Astronomer Cosmos Docker setup & DAG
+├── airflow/                          # Apache Airflow 3 + Astronomer Cosmos Docker setup & DAG
 │   ├── dags/job_postings_dag.py      # Databricks ingestion + DbtTaskGroup DAG
-│   ├── Dockerfile                    # Airflow 2.10 + isolated /opt/airflow/dbt_venv
-│   └── docker-compose.yml            # LocalExecutor stack (Postgres, Webserver, Scheduler)
+│   ├── Dockerfile                    # Airflow 3.1 + isolated /opt/airflow/dbt_venv
+│   └── docker-compose.yml            # LocalExecutor stack (Postgres, API server, Scheduler, DAG processor)
 ├── docs/                             # generated static dbt documentation site (GitHub Pages)
 ├── graphify-out/                     # codebase & dbt lineage knowledge graph (graph.json, GRAPH_REPORT.md, graph.html)
 ├── .agents/                          # AI assistant rules, workflows & graphify skill

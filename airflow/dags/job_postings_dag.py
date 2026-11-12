@@ -19,12 +19,17 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from airflow.decorators import dag, task
-from airflow.operators.empty import EmptyOperator
+try:
+    from airflow.sdk import dag, task
+    from airflow.providers.standard.operators.empty import EmptyOperator
+    from airflow.task.trigger_rule import TriggerRule
+except ImportError:
+    from airflow.decorators import dag, task
+    from airflow.operators.empty import EmptyOperator
+    from airflow.utils.trigger_rule import TriggerRule
+
 from airflow.providers.databricks.operators.databricks import DatabricksRunNowOperator
 from airflow.models import Variable  # UI‑editable variable for dev/prod selection
-from airflow.utils.trigger_rule import TriggerRule
-from airflow.operators.python import PythonOperator  # for auto‑create variable
 from cosmos import (
     DbtTaskGroup,
     ExecutionConfig,
@@ -55,8 +60,8 @@ DATABRICKS_CONN_ID = "databricks_default"
 # ---------------------------------------------------------------------------
 # Reads Host, Token, and SQL Warehouse HTTP Path from Airflow's `databricks_default`
 # connection and dynamically builds a temporary profiles.yml for each task.
-# NOTE: profile_config is built inside the DAG function so Variable.get() runs
-# at execution time (not at module import time, which would break the DagBag).
+# NOTE: Airflow reads this Variable while parsing the DAG; UI changes apply after
+# the Dag processor refreshes the DAG.
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +93,7 @@ def job_postings_databricks_pipeline():
     # ------------------------------------------------------------------
     target_catalog = Variable.get(
         "DBT_TARGET_CATALOG",
-        default_var=os.getenv("DBT_TARGET_CATALOG", "dev"),
+        default_var=DBT_TARGET_CATALOG,
     )
 
     profile_config = ProfileConfig(
@@ -102,12 +107,6 @@ def job_postings_databricks_pipeline():
                 "threads": 4,
             },
         ),
-    )
-
-    # Auto‑create / refresh the Airflow Variable so it's visible in UI
-    ensure_target_catalog = PythonOperator(
-        task_id="ensure_target_catalog",
-        python_callable=lambda **_: Variable.set("DBT_TARGET_CATALOG", target_catalog),
     )
 
     @task.branch(task_id="check_raw_ingestion_job")
@@ -148,7 +147,7 @@ def job_postings_databricks_pipeline():
             # Run a model's schema/data tests immediately after the model finishes!
             # If a staging test fails, downstream marts won't run on bad data.
             test_behavior=TestBehavior.AFTER_EACH,
-            emit_datasets=True,
+            emit_datasets=False,
         ),
     )
 
@@ -158,7 +157,7 @@ def job_postings_databricks_pipeline():
     # 4. Task Dependencies (Orchestration Flow)
     # -----------------------------------------------------------------------
     branch = check_raw_ingestion_job()
-    ensure_target_catalog >> branch >> [load_raw, skip_raw] >> ready_for_dbt >> dbt_analytics >> pipeline_complete
+    branch >> [load_raw, skip_raw] >> ready_for_dbt >> dbt_analytics >> pipeline_complete
 
 
 job_postings_databricks_pipeline()
